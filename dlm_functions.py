@@ -18,16 +18,24 @@ class Prior:
         self.nu = nu # degree of freedom
 
 class Model:
-    def __init__(self,Y,X,rseas,delta):
+    def __init__(self, Y, X, rseas, delta):
         self.Y = Y
         self.X = X
         self.rseas = rseas
-        dd = np.ones(4)*delta
-        self.delta = dd
-        ntrend = 2;nregn = X.shape[1]; pseas = len(rseas);nseas = pseas*2;
+        #dd = np.ones(4)*delta
+        #self.delta = dd
+        self.delta = delta # Marko's change
+        ntrend = 2
+        nregn = X.shape[1]
+        pseas = len(rseas);nseas = pseas*2
         m = np.zeros([ntrend+nregn+nseas,1])
-        C = scipy.linalg.block_diag(1*np.eye(ntrend),1*np.eye(nregn),1*np.eye(nseas))
-        S = np.power(0.2,2); nu = ntrend+nregn+pseas;
+        C = scipy.linalg.block_diag(
+            1*np.eye(ntrend),
+            1*np.eye(nregn),
+            1*np.eye(nseas)
+        )
+        S = np.power(0.2,2)
+        nu = ntrend+nregn+pseas
         pr = Prior(m,C,S,nu)
         self.prior = pr
         
@@ -44,19 +52,35 @@ def forwardFilteringM(Model):
     delta = Model.delta
     Prior = Model.prior
     period = 365.25/16
-    deltrend = delta[0];delregn = delta[1];delseas = delta[2];delvar = delta[3]
-    Ftrend = np.array([[1],[0]]);ntrend = len(Ftrend); Gtrend = np.array([[1,1],[0,1]]);itrend = np.arange(0,ntrend)
-    nregn = X.shape[1];Fregn = np.zeros([nregn,1]);Gregn=np.eye(nregn);iregn = np.arange(ntrend,ntrend+nregn)
-    pseas = len(rseas);nseas = pseas*2;iseas = np.arange(ntrend+nregn,ntrend+nregn+nseas)
-    Fseas = np.matlib.repmat([[1],[0]],pseas,1);Gseas = np.zeros([nseas,nseas]);
+    deltrend = delta[0]
+    delregn = delta[1]
+    delseas = delta[2]
+    #delvar = delta[3]
+    delvar = .99
+    Ftrend = np.array([[1],[0]])
+    ntrend = len(Ftrend)
+    Gtrend = np.array([[1,1],[0,1]])
+    itrend = np.arange(0,ntrend)
+    nregn = X.shape[1]
+    Fregn = np.zeros([nregn,1])
+    Gregn=np.eye(nregn)
+    iregn = np.arange(ntrend,ntrend+nregn)
+    pseas = len(rseas)
+    nseas = pseas*2
+    iseas = np.arange(ntrend+nregn,ntrend+nregn+nseas)
+    Fseas = np.matlib.repmat([[1],[0]],pseas,1)
+    Gseas = np.zeros([nseas,nseas])
     for j in range(pseas):
-        c = np.cos(2*np.pi*rseas[j]/period);
-        s = np.sin(2*np.pi*rseas[j]/period);
+        c = np.cos(2*np.pi*rseas[j]/period)
+        s = np.sin(2*np.pi*rseas[j]/period)
         i = np.arange(2*j,2*(j+1))
         Gseas[np.reshape(i,[2,1]),i] = [[c,s],[-s,c]]
     F = np.concatenate((Ftrend,Fregn,Fseas),axis=0)
     G = scipy.linalg.block_diag(Gtrend,Gregn,Gseas) 
-    m = Prior.m; C = Prior.C; S = Prior.S; nu = Prior.nu
+    m = Prior.m
+    C = Prior.C
+    S = Prior.S
+    nu = Prior.nu
 
     T = len(Y)
     sm = np.zeros(m.shape)
@@ -64,6 +88,7 @@ def forwardFilteringM(Model):
     sS = np.zeros(1)
     snu = np.zeros(1)
     slik = np.zeros(1)
+    
     for t in range(T):
         a = np.dot(G,m)
         R = np.dot(np.dot(G,C),np.transpose(G))
