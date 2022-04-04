@@ -22,9 +22,9 @@ class Model:
         self.Y = Y
         self.X = X
         self.rseas = rseas
-        #dd = np.ones(4)*delta
-        #self.delta = dd
-        self.delta = delta # Marko's change
+        dd = np.ones(4)*delta
+        self.delta = dd
+        #self.delta = delta # Marko's change
         ntrend = 2
         nregn = X.shape[1]
         pseas = len(rseas);nseas = pseas*2
@@ -40,7 +40,7 @@ class Model:
         self.prior = pr
         
         
-def forwardFilteringM(Model):
+def forwardFilteringM(Model, gap=16):
     # All the parameters estimated here correspond Eqs. 13-16 and the related ones in the Supplementary Information of Liu et al. (2019)
     # notation in the code -> notation in Liu et al., 2019: 
     # m -> m_t; C -> C_t^{**}; nu -> n_t; 
@@ -51,12 +51,12 @@ def forwardFilteringM(Model):
     rseas = Model.rseas
     delta = Model.delta
     Prior = Model.prior
-    period = 365.25/16
+    period = 365.25/gap # was 365.25/16 for MODIS comp.
     deltrend = delta[0]
     delregn = delta[1]
     delseas = delta[2]
-    #delvar = delta[3]
-    delvar = .99
+    delvar = delta[3]
+    #delvar = .99
     Ftrend = np.array([[1],[0]])
     ntrend = len(Ftrend)
     Gtrend = np.array([[1,1],[0,1]])
@@ -88,7 +88,7 @@ def forwardFilteringM(Model):
     sS = np.zeros(1)
     snu = np.zeros(1)
     slik = np.zeros(1)
-    
+
     for t in range(T):
         a = np.dot(G,m)
         R = np.dot(np.dot(G,C),np.transpose(G))
@@ -120,8 +120,8 @@ def forwardFilteringM(Model):
         slik = np.concatenate((slik,[mlik]),axis=0)  
     return {'sm':sm, 'sC':sC ,'snu':snu,'slik':slik} 
 
-def computeAnormaly(CLM,AvgCLM,date0):
-    deltaT = timedelta(days=16)
+def computeAnormaly(CLM,AvgCLM,date0, gap=16):
+    deltaT = timedelta(days=gap)
     anCLM = np.zeros([1,CLM.shape[1]])
     for i in range(CLM.shape[0]):
         st = date0+deltaT*(i); st = st.timetuple().tm_yday
@@ -134,8 +134,8 @@ def computeAnormaly(CLM,AvgCLM,date0):
         anCLM = np.concatenate((anCLM,np.reshape(CLM[i,:]- np.mean(AvgCLM[window,:],axis = 0),[1,CLM.shape[1]])),axis=0)
     return anCLM[1:,:]
 
-def Index_low(nn,date0,percentile):
-    intervel = 16
+def Index_low(nn,date0,percentile, gap=16):
+    intervel = gap
     date0_num = date0.toordinal()
     dd = np.arange(date0,date0+timedelta(days=intervel)*len(nn),timedelta(days=intervel))
     dd_num = np.arange(date0_num,date0_num+intervel*(len(nn)),intervel)
@@ -161,17 +161,17 @@ def Index_low(nn,date0,percentile):
     index_low = [i for i in range(len(dd)) if (~np.isnan(nn[i])) and (nn[i]<lowboundary[tt2_num==dd_num[i]])] 
     return index_low
 
-def PlotEWS(N,date0,sm,sC,snu):
+def PlotEWS(N,date0,sm,sC,snu, gap=16):
     # thresholds for identification of abnormally high autocorrelation (EWS)  
     # and abnormally low NDVI(ALN)
     quantile1 = 0.95
     quantile2 = 0.80 
     
-    steps = [date0+relativedelta(days=16*i) for i in range(len(N))]
-    lown = Index_low(N,date0,quantile2)
+    steps = [date0+relativedelta(days=gap*i) for i in range(len(N))]
+    lown = Index_low(N,date0,quantile2, gap=gap)
     lown_continuous = []
     for i in range(len(lown)):
-        tile = [j for j in lown if (j<=lown[i] and j>=lown[i]-5)] 
+        tile = [j for j in lown if (j<=lown[i] and j>=lown[i]-int(90/gap))] 
         if len(tile)>2: 
             #NDVI being abnormally low fro more than half of the time within 3 mon
             lown_continuous = np.concatenate([lown_continuous,[lown[i]]])
@@ -205,7 +205,7 @@ def PlotEWS(N,date0,sm,sC,snu):
     ax1.set_xticks(xtick)
     plt.setp(ax1.get_xticklabels(), visible=False)
     
-    warmup = 47
+    warmup = int(730/gap)
     bd = list(map(lambda m,C,nu: m+C*tdstr.ppf(quantile1,nu),sm,sC,snu))
     bd2 = list(map(lambda m,C,nu: m+C*tdstr.ppf(quantile2,nu),sm,sC,snu))
     
@@ -213,7 +213,7 @@ def PlotEWS(N,date0,sm,sC,snu):
     ews = np.array([i for i,im in enumerate(sm) if im >mbd])
     ews = ews[ews>warmup]
     ews_continuous = []
-    window = int(90/16) # three months
+    window = int(90/gap) # three months
     
     for i in range(len(ews)):
         tile = [j for j in ews if (j<=ews[i] and j>=ews[i]-window)]
